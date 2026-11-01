@@ -1,6 +1,8 @@
 import { Graphics } from 'pixi.js';
-import { BASIC_ATTACK, attackPose, smooth } from '../core/attack';
-import type { Actor, World } from '../core/world';
+import { BASIC_ATTACK } from '../core/attack';
+import { kaelPose, elbowPoint, type PlayerFrame, type SwordTrail } from './kael-motion';
+export { bladePoints } from './kael-motion';
+import type { Actor } from '../core/world';
 import { project, type Vec } from '../math/iso';
 
 const C = { black:0x080e17, dark:0x121d29, plate:0x253343, light:0x435266, edge:0x6a7988,
@@ -17,18 +19,9 @@ class Ink {
   circle(x:number,y:number,r:number,color:number,alpha=1){this.g.circle(...this.point([x,y]),r).fill({color,alpha});}
 }
 
-export function bladePoints(facing:number,elapsed:number|null) {
-  const pose=elapsed===null?{angle:-.25,extension:1}:attackPose(elapsed);
-  const angle=facing+pose.angle;
-  // A 3D horizontal cut projected by the same isometric transform as the world.
-  const at=(radius:number,z:number)=>project({x:Math.cos(angle)*radius,y:Math.sin(angle)*radius},z);
-  return {grip:at(32*pose.extension,48),guard:at(42*pose.extension,48),tip:at(113*pose.extension,48),angle};
-}
 
 function arm(ink:Ink,shoulder:Point,hand:Point,bend:number,front:boolean){
-  const dx=hand[0]-shoulder[0],dy=hand[1]-shoulder[1],d=Math.hypot(dx,dy)||1;
-  const curve=Math.sqrt(Math.max(0,19*19-Math.min(d/2,19)**2));
-  const elbow:Point=[(shoulder[0]+hand[0])/2-dy/d*curve*bend,(shoulder[1]+hand[1])/2+dx/d*curve*bend];
+  const elbow=elbowPoint(shoulder,hand,bend);
   ink.line([shoulder,elbow,hand],C.black,11);
   ink.line([shoulder,elbow],front?C.plate:C.dark,8);
   ink.circle(...elbow,4.8,C.goldShade);ink.circle(...elbow,2.5,C.black);
@@ -56,12 +49,12 @@ function leg(ink:Ink,side:number,stride:number,stance:number){
   ink.line([[foot[0]-5,foot[1]+1],[foot[0]+4,foot[1]+3],[foot[0]+8,foot[1]+1]],C.gold,1);
 }
 
-function sword(ink:Ink,grip:Vec,guard:Vec,tip:Vec,active:boolean){
+function sword(ink:Ink,grip:Vec,guard:Vec,tip:Vec,energy:number){
   const d=Math.hypot(tip.x-grip.x,tip.y-grip.y),angle=Math.atan2(tip.y-grip.y,tip.x-grip.x);
   const blade=new Ink(ink.g,...ink.point([grip.x,grip.y]),angle);
   const h=Math.hypot(guard.x-grip.x,guard.y-grip.y);
   // Narrow bloom in layers instead of a filter over the whole scene.
-  blade.line([[h+2,0],[d-3,0]],C.cyan,active?12:8,active?.12:.06);
+  blade.line([[h+2,0],[d-3,0]],C.cyan,8+4*energy,.06+.06*energy);
   blade.poly([[h,-3],[h+11,-4],[d-9,-2],[d,0],[d-9,2],[h+11,4],[h,3]],0x12434e,C.cyan,.8);
   blade.poly([[h+9,-2],[d,0],[h+12,1.2],[h+4,0]],C.ice);
   blade.poly([[h+9,2.5],[d-10,1],[h+11,4]],C.cyan);
@@ -73,40 +66,32 @@ function sword(ink:Ink,grip:Vec,guard:Vec,tip:Vec,active:boolean){
   blade.circle(h,0,2.3,C.ice);
 }
 
-/** Bounded trail sampled from the actual blade tip; no independent semicircle. */
-function trail(ink:Ink,facing:number,elapsed:number,reducedMotion:boolean){
-  const a=BASIC_ATTACK;
-  if(elapsed<a.windup||elapsed>a.activeEnd+.09)return;
-  const end=Math.min(elapsed,a.activeEnd),start=Math.max(a.windup,end-.065);
-  const fade=elapsed<=a.activeEnd?1:1-smooth((elapsed-a.activeEnd)/.09);
-  const outer:Point[]=[],inner:Point[]=[];
-  for(let i=0;i<=18;i++){
-    const t=mix(start,end,i/18),b=bladePoints(facing,t);
-    outer.push([b.tip.x,b.tip.y]);inner.push([mix(b.grip.x,b.tip.x,.63),mix(b.grip.y,b.tip.y,.63)]);
-  }
+/** Ribbon vertices are recorded world-space blade positions, including running/bob. */
+export function drawSwordTrail(g:Graphics,trail:SwordTrail,reducedMotion:boolean){
+  if(trail.samples.length<2||trail.fade<=0)return;
+  const ink=new Ink(g,0,0),fade=trail.fade;
+  const outer:Point[]=trail.samples.map(s=>[s.tip.x,s.tip.y]);
+  const inner:Point[]=trail.samples.map(s=>[mix(s.grip.x,s.tip.x,.63),mix(s.grip.y,s.tip.y,.63)]);
   ink.poly([...outer,...inner.reverse()],C.cyan,undefined,0,.14*fade);
   ink.line(outer,C.cyan,5,.16*fade);ink.line(outer,C.ice,1.5,.8*fade);
-  const gold=outer.map(([x,y])=>[x*.91,y*.91-4] as Point);ink.line(gold,C.gold,1,.7*fade);
+  const gold:Point[]=trail.samples.map(s=>[mix(s.grip.x,s.tip.x,.91),mix(s.grip.y,s.tip.y,.91)]);
+  ink.line(gold,C.gold,1,.7*fade);
   if(!reducedMotion)for(let i=0;i<9;i++){
-    const t=mix(start,end,i/9),b=bladePoints(facing,t),age=elapsed-t;
-    const x=b.tip.x+Math.cos(i*2.4)*age*65,y=b.tip.y+Math.sin(i*2.4)*age*45;
-    const alpha=Math.max(0,1-age/.14)*fade;
-    ink.line([[x,y],[x-2-Math.cos(i)*3,y+2]],i%3?C.cyan:C.shine,1.2,alpha);
+    const sample=trail.samples[Math.floor(i*(trail.samples.length-1)/8)]!;
+    const age=trail.time-sample.time,x=sample.tip.x+Math.cos(i*2.4)*age*65,y=sample.tip.y+Math.sin(i*2.4)*age*45;
+    ink.line([[x,y],[x-2-Math.cos(i)*3,y+2]],i%3?C.cyan:C.shine,1.2,Math.max(0,1-age/.14)*fade);
   }
 }
 
-export function drawKael(g:Graphics,a:Actor,w:World,reducedMotion:boolean){
-  const p=project(a),attacking=a.attack>0,elapsed=attacking?BASIC_ATTACK.duration-a.attack:null;
-  const pose=elapsed===null?{twist:0,phase:'idle'}:attackPose(elapsed);
-  const facing=attacking?w.attackFacing:a.facing;
+export function drawKael(g:Graphics,a:Actor,w:PlayerFrame,reducedMotion:boolean){
+  const rig=kaelPose({...w,player:a}),{elapsed,pose,facing,bob,stride,stance}=rig,p=rig.position;
   const direction=project({x:Math.cos(facing),y:Math.sin(facing)});
-  const look=Math.max(-1,Math.min(1,direction.x));
-  const gait= Math.sin(a.phase),breath=Math.sin(w.time*2.5)*.65;
-  const bob=attacking?Math.sin((elapsed??0)/BASIC_ATTACK.duration*Math.PI)*-1.7:breath;
+  const look=Math.max(-1,Math.min(1,direction.x)),gait=Math.sin(a.phase);
+  const energy=pose.phase==='active'?Math.sin(Math.PI*((elapsed??0)-BASIC_ATTACK.windup)/(BASIC_ATTACK.activeEnd-BASIC_ATTACK.windup)):0;
   const origin=new Ink(g,p.x,p.y);
   g.ellipse(p.x,p.y+3,23,8).fill({color:0x000000,alpha:.45});
   const ink=new Ink(g,p.x,p.y+bob);
-  const twist=pose.twist,lean=twist*14,lead=direction.x<0?-1:1;
+  const twist=pose.twist,lean=twist*14,lead=1;
   // Cape attaches at both collar bones, with three independently delayed folds.
   const wind=reducedMotion?0:Math.sin(w.time*3.2)*3+gait*1.5;
   const hem=wind-twist*15-look*8*(a.moving??0);
@@ -122,14 +107,14 @@ export function drawKael(g:Graphics,a:Actor,w:World,reducedMotion:boolean){
   g.moveTo(...ink.point([8+lean,-57])).bezierCurveTo(...ink.point([15,-36]),...ink.point([7+hem,-19]),...ink.point([14+hem,-6])).stroke({color:0x305365,width:1,alpha:.5});
   // Small heraldic chevrons stitched into the cape, kept away from the core.
   ink.line([[-16+hem,-22],[-11+hem,-17],[-6+hem,-23]],0x527d84,.8,.5);
-  const stride=attacking?0:gait*5*(a.moving??0);
-  leg(ink,-1,-stride,attacking?2:0);leg(ink,1,stride,attacking?2:0);
+  leg(ink,-1,-stride,stance);leg(ink,1,stride,stance);
   const body=new Ink(g,p.x+lean,p.y+bob,twist*.35);
-  const blade=bladePoints(facing,elapsed);
+  const blade=rig.blade;
   const hx=blade.grip.x-lean,hy=blade.grip.y,r=twist*.35;
   const hand:Point=[hx*Math.cos(r)+hy*Math.sin(r),-hx*Math.sin(r)+hy*Math.cos(r)];
-  const weaponBehind=blade.tip.y<-51;
-  if(weaponBehind){sword(ink,blade.grip,blade.guard,blade.tip,pose.phase==='active');arm(body,[16*lead,-59],hand,lead,false);}
+  // Anatomical hand and depth layer stay fixed throughout each committed cut.
+  const weaponBehind=direction.y<-.08;
+  if(weaponBehind){sword(ink,blade.grip,blade.guard,blade.tip,energy);arm(body,[17*lead,-59],hand,lead,true);}
   // Under-suit connects neck, chest, abdomen and pelvis before plates are layered.
   body.poly([[-9,-68],[9,-68],[17,-59],[11,-39],[9,-31],[-10,-31],[-13,-44],[-17,-59]],C.black);
   body.poly([[-14,-61],[-2,-65],[12,-62],[15,-53],[9,-44],[0,-40],[-12,-47]],C.plate,C.black,1.2);
@@ -174,8 +159,7 @@ export function drawKael(g:Graphics,a:Actor,w:World,reducedMotion:boolean){
   head.line([[-7,0],[-4,3],[-2,3]],C.edge,1);head.line([[3,3],[6,1]],C.edge,1);
   // Swept crown gives Kael an identifiable silhouette without a giant helmet.
   head.poly([[-5,-14],[-8,-23],[-1,-18],[1,-13]],C.dark,C.gold,.8);
-  if(!weaponBehind){arm(body,[17*lead,-59],hand,lead,true);sword(ink,blade.grip,blade.guard,blade.tip,pose.phase==='active');}
-  if(elapsed!==null)trail(ink,facing,elapsed,reducedMotion);
+  if(!weaponBehind){arm(body,[17*lead,-59],hand,lead,true);sword(ink,blade.grip,blade.guard,blade.tip,energy);}
   if(a.hurt>0)origin.circle(0,-53,12,C.ice,a.hurt*.35);
 }
 

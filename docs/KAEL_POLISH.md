@@ -1,5 +1,7 @@
 # Kael e ataque básico — polimento visual
 
+Atualização de 01/11/2026: [correção de orientação pelo mouse e continuidade temporal](ATTACK_STABILITY.md). As evidências abaixo registram a entrega anterior.
+
 ## Entrega
 
 Kael agora tem silhueta mais alta e contínua, placas de grafite com faces sombreadas, lames abdominais, ornamentos dourados, núcleo com encaixe metálico, visor com olhos ciano, coroa assimétrica, ombreiras, manoplas articuladas, joelheiras e botas. A capa usa curvas de Bézier, dobras e defasagem procedural. A espada possui lâmina facetada, fio luminoso, guarda, empunhadura e pomo. Toda a arte-fonte continua sendo geometria PixiJS; nenhum asset raster ou dependência foi adicionado.

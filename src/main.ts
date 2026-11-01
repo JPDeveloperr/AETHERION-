@@ -1,4 +1,5 @@
 import './style.css';
+import { capturePlayer, interpolatePlayer } from './rendering/kael-motion';
 import { Scene } from './rendering/scene';
 import { createWorld, step } from './core/world';
 import { Controls } from './input/controls';
@@ -16,13 +17,14 @@ let world=createWorld(),checkpoint:Checkpoint|null=null,settings={...defaults};
 let platform:ReturnType<typeof browserServices>|null=null;
 const toast=(s:string)=>{$('toast').textContent=s;};
 try{platform=browserServices(window.localStorage);settings=await platform.loadSettings();checkpoint=await platform.loadCheckpoint();}catch{toast('Armazenamento indisponível. A sessão continua sem salvamento.');}
+let previousPlayer=capturePlayer(world);
 const scene=new Scene();
 try{await scene.init($('stage'));}catch{host.textContent='Não foi possível iniciar a renderização. Ative a aceleração gráfica e recarregue.';throw new Error('Renderer initialization failed');}
 const input=new Controls(scene.app.canvas),audio=new Synth();
 const apply=()=>{scene.zoom=settings.zoom;scene.reducedMotion=settings.reducedMotion;input.deadzone=settings.deadzone;audio.volume=settings.volume;};apply();
 const unlock=()=>{void audio.unlock().catch(()=>toast('Áudio indisponível neste dispositivo.'));};
 $('continue').hidden=!checkpoint;
-function start(resume=false){world=createWorld();world.mode='playing';if(resume&&checkpoint?.enemyDefeated){world.enemy.hp=0;world.kills=1;}$('panel').hidden=true;$('settings').hidden=true;$('hud').hidden=false;input.clear();unlock();}
+function start(resume=false){world=createWorld();world.mode='playing';previousPlayer=capturePlayer(world);if(resume&&checkpoint?.enemyDefeated){world.enemy.hp=0;world.kills=1;}$('panel').hidden=true;$('settings').hidden=true;$('hud').hidden=false;input.clear();unlock();}
 $('start').onclick=()=>start();$('continue').onclick=()=>start(true);
 function panel(title:string,description:string,button:string,action:()=>void){$('panel').hidden=false;$('panel').querySelector('h1')!.innerHTML=title;$('panel').querySelector('.intro')!.textContent=description;$('start').textContent=button;$('start').onclick=action;$('continue').hidden=true;$('start').focus();}
 function pause(){if(world.mode==='playing'){world.mode='paused';audio.suspend();input.clear();panel('O eco aguarda.','Respire. Sua jornada continua aqui.','RETOMAR',resume);}else if(world.mode==='paused'&&$('settings').hidden)resume();}
@@ -35,15 +37,15 @@ $('back').onclick=()=>{settings={volume:Number($<HTMLInputElement>('volume').val
 $('fullscreen').onclick=()=>{if(platform)void platform.fullscreen().catch(()=>toast('Tela cheia não está disponível. Use a opção do navegador.'));};
 async function save(){if(!platform)return;checkpoint={version:1,enemyDefeated:world.enemy.hp===0,savedAt:new Date().toISOString()};try{await platform.saveCheckpoint(checkpoint);toast('MARCO SALVO · O eco permanece.');}catch{toast('Não foi possível salvar. Verifique o espaço e as permissões.');}}
 let last=performance.now(),accumulator=0,priorHits=0,priorSwings=0,priorKills=0,priorMode=world.mode,padWasDown=false,padConfirmWasDown=false,menuWasDown=0;
-function frame(now:number){const dt=Math.min((now-last)/1000,.1);last=now;const command=input.sample(scene.screen(world.player));
+function frame(now:number){const dt=Math.min((now-last)/1000,.1);last=now;const command=input.sample();
  if(input.padPause&&!padWasDown)pause();padWasDown=input.padPause;
  if(world.mode!=='playing'&&input.menuDirection&&input.menuDirection!==menuWasDown){const container=$('settings').hidden?$('panel'):$('settings');const items=Array.from(container.querySelectorAll<HTMLElement>('button:not([hidden]),input'));const index=items.indexOf(document.activeElement as HTMLElement);items[(index+input.menuDirection+items.length)%items.length]?.focus();}menuWasDown=input.menuDirection;
  if(input.padConfirm&&!padConfirmWasDown&&world.mode!=='playing') {const focused=document.activeElement;if(focused instanceof HTMLButtonElement)focused.click();else if(focused instanceof HTMLInputElement){if(focused.type==='checkbox')focused.checked=!focused.checked;else{const next=Number(focused.value)+Number(focused.step);focused.value=String(next>Number(focused.max)?Number(focused.min):next);}}else $('start').click();}padConfirmWasDown=input.padConfirm;
- accumulator+=dt;let stepped=false;while(accumulator>=1/60){step(world,command,1/60);stepped=true;accumulator-=1/60;}
+ accumulator+=dt;let stepped=false;while(accumulator>=1/60){previousPlayer=capturePlayer(world);step(world,command,1/60);stepped=true;accumulator-=1/60;}
  if(stepped)input.consumeAttack();
  if(world.swings>priorSwings)audio.swing();priorSwings=world.swings;
  if(world.hits!==priorHits){audio.hit();priorHits=world.hits;}if(world.kills>priorKills)void save();priorKills=world.kills;
  if(world.mode!==priorMode){if(world.mode==='dead')panel('Uma luz<br>se apaga.','A Sentinela venceu. Observe o círculo vermelho e esquive antes do impacto.','TENTAR NOVAMENTE',()=>start());if(world.mode==='won'){void save();panel('O santuário<br>lembra.','Você recuperou o primeiro fragmento. A jornada de Kael está apenas começando.','JOGAR NOVAMENTE',()=>start());}priorMode=world.mode;}
- $('hp').textContent=`${world.player.hp} / 100`;$('hpbar').style.width=`${world.player.hp}%`;$('dodge').textContent=world.dodgeCooldown>0?`ESQUIVA ${world.dodgeCooldown.toFixed(1)}s`:'ESQUIVA PRONTA';$('counter').textContent=`SENTINELAS ${world.kills} / 1`;$('objective').textContent=world.enemy.hp>0?'Derrote a Sentinela Rubra':'Entre no portal a sudeste';scene.render(world,dt);requestAnimationFrame(frame);
+ $('hp').textContent=`${world.player.hp} / 100`;$('hpbar').style.width=`${world.player.hp}%`;$('dodge').textContent=world.dodgeCooldown>0?`ESQUIVA ${world.dodgeCooldown.toFixed(1)}s`:'ESQUIVA PRONTA';$('counter').textContent=`SENTINELAS ${world.kills} / 1`;$('objective').textContent=world.enemy.hp>0?'Derrote a Sentinela Rubra':'Entre no portal a sudeste';scene.render(world,dt,interpolatePlayer(previousPlayer,capturePlayer(world),accumulator/(1/60)));requestAnimationFrame(frame);
 }
 $('start').focus();requestAnimationFrame(frame);

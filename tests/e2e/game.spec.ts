@@ -1,5 +1,7 @@
 import { test,expect } from '@playwright/test';
 test('renders vector arena, starts, pauses and persists settings',async({page})=>{
+ // Several reloads and screenshots share this budget on headless cloud graphics.
+ test.setTimeout(60000);
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('/');await expect(page.locator('canvas')).toBeVisible();await expect(page.locator('#start')).toBeFocused();
  await page.screenshot({path:`test-results/menu-${test.info().project.name}.png`});

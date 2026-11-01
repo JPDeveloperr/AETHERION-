@@ -1,11 +1,13 @@
-import { drawKael, drawImpact } from './kael';
+import { drawKael, drawImpact, drawSwordTrail } from './kael';
+import { capturePlayer, kaelPose, SwordTrail, type PlayerFrame } from './kael-motion';
 import { BASIC_ATTACK, attackPose } from '../core/attack';
 import { Application, Container, Graphics } from 'pixi.js';
 import { project, type Vec } from '../math/iso';
 import type { World, Actor } from '../core/world';
 export class Scene {
+ private swordTrail=new SwordTrail();
  app=new Application();root=new Container();floor=new Graphics();actors=new Graphics();decor=new Graphics();camera={x:0,y:0};zoom=1;reducedMotion=false;
- async init(host:HTMLElement){await this.app.init({resizeTo:window,background:0x060c18,antialias:true,resolution:Math.min(devicePixelRatio,2),autoDensity:true});host.append(this.app.canvas);this.app.stage.addChild(this.root);this.root.addChild(this.floor,this.decor,this.actors);this.buildFloor();}
+ async init(host:HTMLElement){await this.app.init({autoStart:false,resizeTo:window,background:0x060c18,antialias:true,resolution:Math.min(devicePixelRatio,2),autoDensity:true});host.append(this.app.canvas);this.app.stage.addChild(this.root);this.root.addChild(this.floor,this.decor,this.actors);this.buildFloor();}
  private diamond(g:Graphics,x:number,y:number,size:number,color:number,alpha=1){const p=project({x,y});g.poly([p.x,p.y-size*.5,p.x+size*.866,p.y,p.x,p.y+size*.5,p.x-size*.866,p.y]).fill({color,alpha});}
  private buildFloor(){const g=this.floor;
  for(let ring=0;ring<5;ring++){this.diamond(g,0,0,870-ring*16,0x142331,.3+ring*.1);}
@@ -31,12 +33,16 @@ export class Scene {
  const dir=project({x:Math.cos(a.facing),y:Math.sin(a.facing)});const angle=Math.atan2(dir.y,dir.x)+(a.attack>0?Math.sin(a.attack*18)*1.4:0);const bx=x+21,by=y-28;g.moveTo(bx,by).lineTo(bx+Math.cos(angle)*42,by+Math.sin(angle)*42).stroke({color:bright,width:enemy?3:4});g.circle(bx,by,3).fill(gold);
  if(enemy){g.roundRect(x-28,y-37,14,23,3).fill(0x4b2b3c).stroke({color:gold,width:2});g.rect(x-24,y-83,48,3).fill(0x281722);g.rect(x-24,y-83,48*a.hp/100,3).fill(0xec6965);}
  }
- render(w:World,dt:number){this.app.canvas.dataset.playerX=w.player.x.toFixed(2);this.app.canvas.dataset.playerY=w.player.y.toFixed(2);this.app.canvas.dataset.attackPhase=w.player.attack>0?attackPose(BASIC_ATTACK.duration-w.player.attack).phase:'idle';this.app.canvas.dataset.swings=String(w.swings);this.app.canvas.dataset.effects=String(w.effects.length);const target=project(w.player);const follow=1-Math.exp(-dt*3);this.camera.x+=(target.x*.35-this.camera.x)*follow;this.camera.y+=(target.y*.35-this.camera.y)*follow;const scale=Math.min(innerWidth/1250,innerHeight/800)*this.zoom;this.root.scale.set(scale);this.root.position.set(innerWidth/2-this.camera.x*scale,innerHeight*.55-this.camera.y*scale);const g=this.actors;g.clear();
+ render(w:World,dt:number,view:PlayerFrame=capturePlayer(w)){this.app.canvas.dataset.playerX=w.player.x.toFixed(2);this.app.canvas.dataset.playerY=w.player.y.toFixed(2);this.app.canvas.dataset.attackPhase=w.player.attack>0?attackPose(BASIC_ATTACK.duration-w.player.attack).phase:'idle';this.app.canvas.dataset.swings=String(w.swings);this.app.canvas.dataset.effects=String(w.effects.length);const target=project(view.player);const follow=1-Math.exp(-dt*3);this.camera.x+=(target.x*.35-this.camera.x)*follow;this.camera.y+=(target.y*.35-this.camera.y)*follow;const scale=Math.min(innerWidth/1250,innerHeight/800)*this.zoom;this.root.scale.set(scale);this.root.position.set(innerWidth/2-this.camera.x*scale,innerHeight*.55-this.camera.y*scale);const g=this.actors;g.clear();
  const portal=project({x:285,y:285});for(let i=0;i<4;i++)g.ellipse(portal.x,portal.y-36,25+i*7,44+i*8).stroke({color:w.enemy.hp<=0?0x55f3ef:0x6b6695,width:2,alpha:.2+i*.13});
  if(w.telegraph>0){const p=project(w.enemy);g.ellipse(p.x,p.y,150,86).fill({color:0xf64c62,alpha:.12}).stroke({color:0xff6976,width:2});g.ellipse(p.x,p.y,150*(1-w.telegraph/.8),86*(1-w.telegraph/.8)).stroke({color:0xff6976,width:2});}
- const actors=[{a:w.player,enemy:false},...(w.enemy.hp>0?[{a:w.enemy,enemy:true}]:[])].sort((a,b)=>a.a.x+a.a.y-b.a.x-b.a.y);
- for(const a of actors){if(a.enemy)this.actor(g,a.a,true,this.reducedMotion?0:w.time);else drawKael(g,a.a,w,this.reducedMotion);}
+ const actors=[{a:view.player,enemy:false},...(w.enemy.hp>0?[{a:w.enemy,enemy:true}]:[])].sort((a,b)=>a.a.x+a.a.y-b.a.x-b.a.y);
+ for(const a of actors){if(a.enemy)this.actor(g,a.a,true,this.reducedMotion?0:w.time);else drawKael(g,a.a,view,this.reducedMotion);}
+ this.swordTrail.update(view);drawSwordTrail(g,this.swordTrail,this.reducedMotion);
+ const rig=kaelPose(view);
+ Object.assign(this.app.canvas.dataset,{bladeX:String(rig.tip.x),bladeY:String(rig.tip.y),bladeLocalX:String(rig.blade.tip.x),bladeLocalY:String(rig.blade.tip.y),renderX:String(view.player.x),renderY:String(view.player.y),renderPhase:rig.pose.phase,renderTime:String(view.time),renderFacing:String(rig.facing),renderAttack:String(view.player.attack),attackId:String(view.attackId),trailCount:String(this.swordTrail.samples.length)});
  for(const e of w.effects)if(e.kind==='hit')drawImpact(g,e,e.life);
  if(!this.reducedMotion)for(let i=0;i<32;i++){const x=Math.sin(i*71)*550,y=Math.cos(i*43)*260-((w.time*12+i*17)%150);g.circle(x,y,1.2).fill({color:0x63c5dc,alpha:.2+.2*Math.sin(w.time+i)});}
+ this.app.render();
  }
 }

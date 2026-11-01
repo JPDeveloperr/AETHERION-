@@ -18,7 +18,7 @@ npm run build
 npm run preview
 ```
 
-WASD/setas: movimento; mouse: direção; clique esquerdo/J: ataque; espaço: esquiva; Esc: pausa. No controle: analógico esquerdo move, direito aponta, X/□ ataca, A/× esquiva e Start pausa. D-pad percorre menu, A confirma. Fuja do círculo vermelho antes do ataque; após derrotar a Sentinela, entre no portal a sudeste. O marco salvo restaura a vitória sobre o inimigo, com vida cheia.
+WASD/setas: movimento e orientação; clique esquerdo/J: ataque; espaço: esquiva; Esc: pausa. No controle: analógico esquerdo move, direito aponta, X/□ ataca, A/× esquiva e Start pausa. D-pad percorre menu, A confirma. Mover o cursor não altera a pose da espada; a direção permanece fixa durante cada golpe. Fuja do círculo vermelho antes do ataque; após derrotar a Sentinela, entre no portal a sudeste. O marco salvo restaura a vitória sobre o inimigo, com vida cheia.
 
 ## Validar
 
@@ -45,3 +45,5 @@ Arena curta, uma classe de inimigo, ataque básico, esquiva, vida/morte, menu, p
 Electron/Steamworks e builds Windows/Linux são futuros e ainda não validados. Nenhum build será publicado na Steam nem pagamento será feito sem autorização explícita.
 
 ![Arena vetorial do Santuário Partido](docs/screenshots/arena.png)
+
+Correção do ataque: [causas, testes e sequências de frames](docs/ATTACK_STABILITY.md).
