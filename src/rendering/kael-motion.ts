@@ -1,3 +1,4 @@
+import {ABILITIES,abilityPose,type Cast} from '../core/abilities';
 import { attackSpec, attackPose } from '../core/attack';
 import type { Actor, World, Mode } from '../core/world';
 import { project, type Vec } from '../math/iso';
@@ -10,10 +11,11 @@ export interface PlayerFrame {
   attackId: number;
   mode: Mode;
   comboIndex?: number;
+  special?: Cast|null;
 }
 export function capturePlayer(w:World):PlayerFrame {
   return {player:{...w.player},time:w.time,attackFacing:w.attackFacing,
-    attackStartedAt:w.attackStartedAt,attackId:w.attackId,comboIndex:w.comboIndex,mode:w.mode};
+    attackStartedAt:w.attackStartedAt,attackId:w.attackId,comboIndex:w.comboIndex,special:w.powers.cast?{...w.powers.cast}:null,mode:w.mode};
 }
 const lerp=(a:number,b:number,t:number)=>a+(b-a)*t;
 export function angleLerp(a:number,b:number,t:number){return a+Math.atan2(Math.sin(b-a),Math.cos(b-a))*t;}
@@ -23,15 +25,16 @@ export function interpolatePlayer(a:PlayerFrame,b:PlayerFrame,alpha:number):Play
   const t=Math.max(0,Math.min(1,alpha)),time=lerp(a.time,b.time,t);
   // A newly accepted attack is an event, not a timer that may be lerped backwards.
   const event=b.attackId!==a.attackId&&time<b.attackStartedAt?a:b;
+  const special=b.special&&time>=b.special.startedAt?b.special:a.special&&time<a.special.startedAt+ABILITIES[a.special.kind].duration?a.special:null;
   const elapsed=time-event.attackStartedAt,A=attackSpec(event.comboIndex);
   const remaining=event.attackId>0&&elapsed>=0&&elapsed<A.duration?A.duration-elapsed:0;
-  return {...event,time,mode:b.mode,player:{...b.player,
+  return {...event,time,special,mode:b.mode,player:{...b.player,
     x:lerp(a.player.x,b.player.x,t),y:lerp(a.player.y,b.player.y,t),
     facing:angleLerp(a.player.facing,b.player.facing,t),phase:lerp(a.player.phase,b.player.phase,t),
     moving:lerp(a.player.moving??0,b.player.moving??0,t),hurt:lerp(a.player.hurt,b.player.hurt,t),attack:remaining}};
 }
-export function bladePoints(facing:number,elapsed:number|null,index=0) {
-  const pose=elapsed===null?{angle:-.25,extension:1}:attackPose(elapsed,index);
+export function bladePoints(facing:number,elapsed:number|null,index=0,special?:{kind:Cast['kind'];elapsed:number}) {
+  const pose=special?abilityPose(special.elapsed,special.kind):elapsed===null?{angle:-.25,extension:1}:attackPose(elapsed,index);
   const angle=facing+pose.angle;
   const lift=index===2&&elapsed!==null?Math.sin(Math.PI*Math.max(0,Math.min(1,elapsed/attackSpec(index).duration)))**2*12:0;
   const at=(radius:number,z:number)=>project({x:Math.cos(angle)*radius,y:Math.sin(angle)*radius},z+lift);
@@ -39,14 +42,15 @@ export function bladePoints(facing:number,elapsed:number|null,index=0) {
 }
 /** Shared, continuous body channels; locomotion never switches on/off at an attack edge. */
 export function kaelPose(f:PlayerFrame) {
-  const A=attackSpec(f.comboIndex),a=f.player,elapsed=a.attack>0?A.duration-a.attack:null;
-  const pose=elapsed===null?{angle:-.25,extension:1,twist:0,weight:0,phase:'idle' as const}:attackPose(elapsed,f.comboIndex);
-  const facing=elapsed===null?a.facing:f.attackFacing;
+  const A=attackSpec(f.comboIndex),a=f.player,special=f.special,elapsed=special?f.time-special.startedAt:a.attack>0?A.duration-a.attack:null;
+  const pose=special&&elapsed!==null?abilityPose(elapsed,special.kind):elapsed===null?{angle:-.25,extension:1,twist:0,weight:0,phase:'idle' as const}:attackPose(elapsed,f.comboIndex);
+  const facing=special?special.facing:elapsed===null?a.facing:f.attackFacing;
   const breath=Math.sin(f.time*2.5)*.65;
-  const bob=lerp(breath,-Math.sin((elapsed??0)/A.duration*Math.PI)*(f.comboIndex===2?3.5:1.7),pose.weight);
+  const duration=special?ABILITIES[special.kind].duration:A.duration;
+  const bob=lerp(breath,-Math.sin((elapsed??0)/duration*Math.PI)*(special?.kind==='nova'?4:f.comboIndex===2?3.5:1.7),pose.weight);
   const moving=a.moving??0;
   const stride=Math.sin(a.phase)*5*moving*(1-.25*pose.weight);
-  const position=project(a),blade=bladePoints(facing,elapsed,f.comboIndex);
+  const position=project(a),blade=bladePoints(facing,special?null:elapsed,f.comboIndex,special&&elapsed!==null?{kind:special.kind,elapsed}:undefined);
   return {elapsed,pose,facing,bob,stride,stance:2*pose.weight*(1-.7*moving),position,blade,
     grip:{x:position.x+blade.grip.x,y:position.y+bob+blade.grip.y},
     tip:{x:position.x+blade.tip.x,y:position.y+bob+blade.tip.y}};
@@ -71,7 +75,7 @@ export class SwordTrail {
     this.time=frame.time;
     const elapsed=frame.time-frame.attackStartedAt;
     if(frame.attackId!==this.id){this.samples.length=0;this.id=frame.attackId;}
-    if(frame.mode==='dead'||frame.mode==='won'||elapsed>A.activeEnd+.09||frame.attackId===0){
+    if(frame.special||frame.mode==='paused'||frame.mode==='dead'||frame.mode==='won'||elapsed>A.activeEnd+.09||frame.attackId===0){
       this.samples.length=0;this.fade=0;this.previous=frame;return;
     }
     const from=this.previous;
