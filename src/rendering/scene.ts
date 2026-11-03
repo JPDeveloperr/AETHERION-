@@ -1,3 +1,5 @@
+import {recoilPosition} from './feedback';
+import {drawPowerEffects} from './aether';
 import { drawSpecter, drawProjectile } from './specter';
 import { drawKael, drawImpact, drawSwordTrail } from './kael';
 import { capturePlayer, kaelPose, SwordTrail, type PlayerFrame } from './kael-motion';
@@ -41,7 +43,7 @@ export class Scene {
  for(const [x,y] of [[-360,-360],[-360,-160],[-160,-360],[360,-360],[-360,360],[360,50]] as [number,number][]){const p=project({x,y});this.diamond(d,x,y,46,0x080f19);d.poly([p.x-23,p.y,p.x-23,p.y-115,p.x,p.y-130,p.x,p.y+12]).fill(0x263e4a);d.poly([p.x,p.y+12,p.x,p.y-130,p.x+23,p.y-115,p.x+23,p.y]).fill(0x132530);d.poly([p.x-23,p.y-115,p.x,p.y-130,p.x+23,p.y-115,p.x,p.y-101]).fill(0x3e5860);d.moveTo(p.x,p.y-20).lineTo(p.x,p.y-92).stroke({color:0x47d9dc,width:3});d.moveTo(p.x-20,p.y-108).lineTo(p.x,p.y-96).lineTo(p.x+20,p.y-108).stroke({color:0xb99b61,width:3});}
  }
  screen(p:Vec){const v=project(p);return{x:this.root.x+v.x*this.root.scale.x,y:this.root.y+v.y*this.root.scale.y};}
- private actor(g:Graphics,a:Actor,enemy:boolean,time:number){const p=project(a),bob=Math.sin(a.phase)*2;const x=p.x,y=p.y+bob;const bright=a.hurt>0?0xffffff:enemy?0xff6e67:0x55f3ef;const metal=enemy?0x552c3b:0x263e51;const gold=0xc7a56a;
+ private actor(g:Graphics,a:Actor,enemy:boolean,time:number){const p=project(recoilPosition(a)),bob=Math.sin(a.phase)*2;const x=p.x,y=p.y+bob;const bright=a.hurt>0?0xffffff:enemy?0xff6e67:0x55f3ef;const metal=enemy?0x552c3b:0x263e51;const gold=0xc7a56a;
  g.ellipse(p.x,p.y+4,22,9).fill({color:0x000000,alpha:.5});
  // Cape, articulated boots, armor, head, shoulder plates, energy core.
  g.poly([x-12,y-47,x+12,y-47,x+22+Math.sin(time*3)*3,y-9,x+1,y-2,x-21,y-10]).fill(enemy?0x421b2d:0x123e55);
@@ -66,9 +68,9 @@ export class Scene {
   else drawKael(g,a.a,view,this.reducedMotion);
  }
  for(const b of w.projectiles)drawProjectile(g,b);
- this.swordTrail.update(view);drawSwordTrail(g,this.swordTrail,this.reducedMotion);
+ this.swordTrail.update(view);drawSwordTrail(g,this.swordTrail,this.reducedMotion);drawPowerEffects(g,w,view,this.reducedMotion);
  const rig=kaelPose(view);
- Object.assign(this.app.canvas.dataset,{bladeX:String(rig.tip.x),bladeY:String(rig.tip.y),bladeLocalX:String(rig.blade.tip.x),bladeLocalY:String(rig.blade.tip.y),renderX:String(view.player.x),renderY:String(view.player.y),renderPhase:rig.pose.phase,renderTime:String(view.time),renderFacing:String(rig.facing),renderAttack:String(view.player.attack),attackId:String(view.attackId),trailCount:String(this.swordTrail.samples.length),comboIndex:String(view.comboIndex??0),completedEncounters:String(w.completedEncounters),enemies:String(w.enemies.filter(e=>e.hp>0).length),projectiles:String(w.projectiles.length),enemyState:JSON.stringify(w.enemies.map(e=>({id:e.id,kind:e.kind,x:e.x,y:e.y,hp:e.hp,telegraph:e.telegraph,aim:e.aim,death:e.death}))),projectileState:JSON.stringify(w.projectiles),hp:String(w.player.hp),mode:w.mode});
+ Object.assign(this.app.canvas.dataset,{bladeX:String(rig.tip.x),bladeY:String(rig.tip.y),bladeLocalX:String(rig.blade.tip.x),bladeLocalY:String(rig.blade.tip.y),renderX:String(view.player.x),renderY:String(view.player.y),renderPhase:rig.pose.phase,renderTime:String(view.time),renderFacing:String(rig.facing),renderAttack:String(view.player.attack),attackId:String(view.attackId),trailCount:String(this.swordTrail.samples.length),comboIndex:String(view.comboIndex??0),completedEncounters:String(w.completedEncounters),enemies:String(w.enemies.filter(e=>e.hp>0).length),projectiles:String(w.projectiles.length),enemyState:JSON.stringify(w.enemies.map(e=>({id:e.id,kind:e.kind,x:e.x,y:e.y,hp:e.hp,telegraph:e.telegraph,aim:e.aim,death:e.death}))),projectileState:JSON.stringify(w.projectiles),hp:String(w.player.hp),mode:w.mode,screenPlayerX:String(this.screen(view.player).x),screenPlayerY:String(this.screen(view.player).y),dodgeActive:String(w.dodge),basicCooldown:String(w.cooldown),energy:String(w.powers.energy),energyEvents:String(w.powers.energyEvent.id),ability:view.special?.kind??'idle',castId:String(w.powers.casts),emissions:String(w.powers.emissions),perfectDodges:String(w.powers.perfectDodges),bursts:String(w.powers.bursts.length),bladeCooldown:String(w.powers.cooldowns.blade),novaCooldown:String(w.powers.cooldowns.nova),simulationTime:String(w.time),burstState:JSON.stringify(w.powers.bursts)});
  for(const e of w.effects)if(e.kind==='hit')drawImpact(g,e,e.life,e.power);
  if(!this.reducedMotion)for(let i=0;i<32;i++){const x=Math.sin(i*71)*550,y=Math.cos(i*43)*260-((w.time*12+i*17)%150);g.circle(x,y,1.2).fill({color:0x63c5dc,alpha:.2+.2*Math.sin(w.time+i)});}
  this.app.render();

@@ -1,3 +1,4 @@
+import {recoilPosition} from '../../src/rendering/feedback';
 import {describe,it,expect} from 'vitest';
 import {ABILITIES,abilityPose,burstCrosses,createPowers,grantAether,perfectDodge,requestAbility,type AbilityKind} from '../../src/core/abilities';
 import {createWorld,createEnemy,restoreEncounters,step,type Command} from '../../src/core/world';
@@ -110,4 +111,13 @@ describe.each(['blade','nova'] as const)('%s continuous body rig',kind=>{
   expect(interpolatePlayer(before,after,.5).special).toBeNull();expect(interpolatePlayer(before,after,1).special?.kind).toBe(kind);
   let prev=after,acc=0;for(let i=0;i<hz;i++){acc+=1/hz;while(acc>=1/60){prev=capturePlayer(w);tick(w);acc-=1/60;}const f=interpolatePlayer(prev,capturePlayer(w),acc*60);expect(Number.isFinite(kaelPose(f).tip.x)).toBe(true);}
  });
+});
+
+describe('enemy impact presentation',()=>{
+ it.each([0,.2])('keeps recoil position and velocity continuous at %s',boundary=>{
+  const sample=(t:number)=>recoilPosition({...createEnemy('specter',4,50,70),hurt:t,recoilFacing:1});
+  const h=1e-6,l=sample(boundary-h),c=sample(boundary),r=sample(boundary+h);
+  for(const k of ['x','y'] as const){expect(Math.abs(l[k]-r[k])).toBeLessThan(.001);expect(Math.abs((c[k]-l[k])/h-(r[k]-c[k])/h)).toBeLessThan(.01);}
+ });
+ it('reacts along the hit direction without altering simulation coordinates',()=>{const e={...createEnemy('sentinel',1,50,70),hurt:.1,recoilFacing:Math.PI/2},p=recoilPosition(e);expect(p.x).toBeCloseTo(50);expect(p.y).toBeCloseTo(78);expect(e.y).toBe(70);});
 });

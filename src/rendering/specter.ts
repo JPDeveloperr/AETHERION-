@@ -1,10 +1,11 @@
+import {recoilPosition} from './feedback';
 import { Graphics } from 'pixi.js';
 import type { Enemy, Projectile } from '../core/world';
 import { project } from '../math/iso';
 
 /** Retained source geometry only: floating shards, hollow mantle and an exposed core. */
 export function drawSpecter(g:Graphics,e:Enemy,time:number,reducedMotion:boolean) {
- const p=project(e),dy=reducedMotion?0:Math.sin(time*2.8+e.id)*4;
+ const p=project(recoilPosition(e)),dy=reducedMotion?0:Math.sin(time*2.8+e.id)*4;
  const dead=e.hp<=0,fade=dead?e.death/.65:1,burst=dead?(1-fade)*40:0;
  if(fade<=0)return;
  const x=p.x,y=p.y-24+dy,charge=Math.max(0,e.telegraph/.85);

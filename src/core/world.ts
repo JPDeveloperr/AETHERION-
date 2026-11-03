@@ -3,7 +3,7 @@ import {damageEnemy,clampArena as clamp} from './combat';
 import { attackSpec, COMBO_GRACE, INPUT_BUFFER, crossesTarget } from './attack';
 import { distance, normalized, type Vec } from '../math/iso';
 export interface Actor extends Vec {hp:number;facing:number;attack:number;hurt:number;phase:number;moving?:number;desiredFacing?:number}
-export interface Enemy extends Actor {id:number;kind:'sentinel'|'specter';cooldown:number;telegraph:number;death:number;aim:number;strikeId:number}
+export interface Enemy extends Actor {id:number;kind:'sentinel'|'specter';cooldown:number;telegraph:number;death:number;aim:number;strikeId:number;recoilFacing?:number}
 export interface Projectile extends Vec {vx:number;vy:number;life:number;id:number}
 export interface Command {move:Vec;aim:Vec|null;attack:boolean;attackPressed?:boolean;dodge:boolean;blade?:boolean;nova?:boolean;bladePressed?:boolean;novaPressed?:boolean}
 export type Mode='menu'|'playing'|'paused'|'dead'|'won';
@@ -45,7 +45,7 @@ export function segmentHits(a:Vec,b:Vec,p:Vec,radius:number) {
 }
 export function step(w:World,c:Command,dt:number) {
  if(w.mode!=='playing'){clearAbilityEffects(w);w.effects=[];return;}
- if(w.player.hp<=0){w.mode='dead';w.player.attack=0;w.effects=[];w.projectiles=[];w.bufferUntil=0;clearAbilityEffects(w);return;}
+ if(w.player.hp<=0){w.mode='dead';w.player.attack=0;w.effects=[];w.projectiles=[];w.bufferUntil=0;clearAbilityEffects(w);for(const e of w.enemies)e.death=0;return;}
  const previousCast=w.powers.cast;
  const bladePressed=c.bladePressed??(!!c.blade&&!w.powers.bladeDown),novaPressed=c.novaPressed??(!!c.nova&&!w.powers.novaDown);
  w.powers.bladeDown=!!c.blade;w.powers.novaDown=!!c.nova;
