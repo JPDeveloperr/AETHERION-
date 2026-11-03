@@ -1,6 +1,7 @@
+import { drawSpecter, drawProjectile } from './specter';
 import { drawKael, drawImpact, drawSwordTrail } from './kael';
 import { capturePlayer, kaelPose, SwordTrail, type PlayerFrame } from './kael-motion';
-import { BASIC_ATTACK, attackPose } from '../core/attack';
+import { attackSpec, attackPose } from '../core/attack';
 import { Application, Container, Graphics } from 'pixi.js';
 import { project, type Vec } from '../math/iso';
 import type { World, Actor } from '../core/world';
@@ -15,7 +16,28 @@ export class Scene {
  const c=project({x:0,y:0});for(const r of [95,106,156,162])g.ellipse(c.x,c.y,r*1.732,r).stroke({color:0xb89b58,width:r===106?2:1,alpha:.55});
  for(let i=0;i<16;i++){const a=i*Math.PI/8;const p=project({x:225*Math.cos(a),y:225*Math.sin(a)});g.poly([p.x-4,p.y,p.x,p.y-6,p.x+4,p.y,p.x,p.y+6]).fill(0xb89b58);}
  for(const x of [-345,345])for(let y=-320;y<350;y+=80){const p=project({x,y});g.moveTo(p.x-9,p.y).lineTo(p.x+9,p.y).stroke({color:0x58dcd5,width:2,alpha:.6});}
+ // Engraved runes and branching energy seams, built once rather than per frame.
+ for(let i=0;i<20;i++){
+  const a=i*Math.PI/10,p=project({x:285*Math.cos(a),y:285*Math.sin(a)});
+  g.ellipse(p.x,p.y,12,6).fill({color:0x52d6d7,alpha:.06});
+  g.moveTo(p.x-5,p.y-4).lineTo(p.x,p.y+4).lineTo(p.x+5,p.y-4).moveTo(p.x-4,p.y).lineTo(p.x+4,p.y)
+   .stroke({color:0x69ded8,width:1,alpha:.55});
+ }
+ for(const [x,y] of [[-200,-40],[75,-260],[230,170],[-230,235]]){
+  const p=project({x:x!,y:y!});
+  const seam=[p.x-48,p.y-20,p.x-21,p.y-10,p.x-12,p.y-13,p.x+6,p.y+1,p.x+32,p.y+10];
+  g.poly(seam,false).stroke({color:0x44bfc9,width:7,alpha:.045}).stroke({color:0x62ded5,width:1,alpha:.4});
+ }
  const d=this.decor;
+ // Crystals occupy the outer border; the playable floor stays unobstructed.
+ for(const [x,y,h] of [[-335,280,34],[310,-315,44],[-280,-320,26],[330,170,32]]){
+  const p=project({x:x!,y:y!}),height=h!;
+  d.ellipse(p.x+12,p.y+6,33,10).fill({color:0x00030b,alpha:.4});
+  d.ellipse(p.x,p.y,29,13).fill({color:0x7577dc,alpha:.07});
+  d.poly([p.x-9,p.y-3,p.x-5,p.y-height,p.x+2,p.y-height-8,p.x+11,p.y-10,p.x+4,p.y+4]).fill(0x385175).stroke({color:0x8cb8de,width:1});
+  d.poly([p.x+2,p.y-height-8,p.x+2,p.y,p.x+11,p.y-10]).fill(0x608ea5);
+  d.moveTo(p.x-3,p.y-height+3).lineTo(p.x-1,p.y-8).stroke({color:0x96f3ef,width:1.5,alpha:.8});
+ }
  for(const [x,y] of [[-360,-360],[-360,-160],[-160,-360],[360,-360],[-360,360],[360,50]] as [number,number][]){const p=project({x,y});this.diamond(d,x,y,46,0x080f19);d.poly([p.x-23,p.y,p.x-23,p.y-115,p.x,p.y-130,p.x,p.y+12]).fill(0x263e4a);d.poly([p.x,p.y+12,p.x,p.y-130,p.x+23,p.y-115,p.x+23,p.y]).fill(0x132530);d.poly([p.x-23,p.y-115,p.x,p.y-130,p.x+23,p.y-115,p.x,p.y-101]).fill(0x3e5860);d.moveTo(p.x,p.y-20).lineTo(p.x,p.y-92).stroke({color:0x47d9dc,width:3});d.moveTo(p.x-20,p.y-108).lineTo(p.x,p.y-96).lineTo(p.x+20,p.y-108).stroke({color:0xb99b61,width:3});}
  }
  screen(p:Vec){const v=project(p);return{x:this.root.x+v.x*this.root.scale.x,y:this.root.y+v.y*this.root.scale.y};}
@@ -33,15 +55,21 @@ export class Scene {
  const dir=project({x:Math.cos(a.facing),y:Math.sin(a.facing)});const angle=Math.atan2(dir.y,dir.x)+(a.attack>0?Math.sin(a.attack*18)*1.4:0);const bx=x+21,by=y-28;g.moveTo(bx,by).lineTo(bx+Math.cos(angle)*42,by+Math.sin(angle)*42).stroke({color:bright,width:enemy?3:4});g.circle(bx,by,3).fill(gold);
  if(enemy){g.roundRect(x-28,y-37,14,23,3).fill(0x4b2b3c).stroke({color:gold,width:2});g.rect(x-24,y-83,48,3).fill(0x281722);g.rect(x-24,y-83,48*a.hp/100,3).fill(0xec6965);}
  }
- render(w:World,dt:number,view:PlayerFrame=capturePlayer(w)){this.app.canvas.dataset.playerX=w.player.x.toFixed(2);this.app.canvas.dataset.playerY=w.player.y.toFixed(2);this.app.canvas.dataset.attackPhase=w.player.attack>0?attackPose(BASIC_ATTACK.duration-w.player.attack).phase:'idle';this.app.canvas.dataset.swings=String(w.swings);this.app.canvas.dataset.effects=String(w.effects.length);const target=project(view.player);const follow=1-Math.exp(-dt*3);this.camera.x+=(target.x*.35-this.camera.x)*follow;this.camera.y+=(target.y*.35-this.camera.y)*follow;const scale=Math.min(innerWidth/1250,innerHeight/800)*this.zoom;this.root.scale.set(scale);this.root.position.set(innerWidth/2-this.camera.x*scale,innerHeight*.55-this.camera.y*scale);const g=this.actors;g.clear();
- const portal=project({x:285,y:285});for(let i=0;i<4;i++)g.ellipse(portal.x,portal.y-36,25+i*7,44+i*8).stroke({color:w.enemy.hp<=0?0x55f3ef:0x6b6695,width:2,alpha:.2+i*.13});
- if(w.telegraph>0){const p=project(w.enemy);g.ellipse(p.x,p.y,150,86).fill({color:0xf64c62,alpha:.12}).stroke({color:0xff6976,width:2});g.ellipse(p.x,p.y,150*(1-w.telegraph/.8),86*(1-w.telegraph/.8)).stroke({color:0xff6976,width:2});}
- const actors=[{a:view.player,enemy:false},...(w.enemy.hp>0?[{a:w.enemy,enemy:true}]:[])].sort((a,b)=>a.a.x+a.a.y-b.a.x-b.a.y);
- for(const a of actors){if(a.enemy)this.actor(g,a.a,true,this.reducedMotion?0:w.time);else drawKael(g,a.a,view,this.reducedMotion);}
+ render(w:World,dt:number,view:PlayerFrame=capturePlayer(w)){const A=attackSpec(w.comboIndex);this.app.canvas.dataset.playerX=w.player.x.toFixed(2);this.app.canvas.dataset.playerY=w.player.y.toFixed(2);this.app.canvas.dataset.attackPhase=w.player.attack>0?attackPose(A.duration-w.player.attack,w.comboIndex).phase:'idle';this.app.canvas.dataset.swings=String(w.swings);this.app.canvas.dataset.effects=String(w.effects.length);const target=project(view.player);const follow=1-Math.exp(-dt*3);this.camera.x+=(target.x*.35-this.camera.x)*follow;this.camera.y+=(target.y*.35-this.camera.y)*follow;const scale=Math.min(innerWidth/1250,innerHeight/800)*this.zoom;this.root.scale.set(scale);this.root.position.set(innerWidth/2-this.camera.x*scale,innerHeight*.55-this.camera.y*scale);const g=this.actors;g.clear();
+ const portal=project({x:285,y:285});for(let i=0;i<4;i++)g.ellipse(portal.x,portal.y-36,25+i*7,44+i*8).stroke({color:w.completedEncounters===3?0x55f3ef:0x6b6695,width:2,alpha:.2+i*.13});
+ for(const e of w.enemies)if(e.telegraph>0&&e.kind==='sentinel'){
+ const p=project(e);g.ellipse(p.x,p.y,150,86).fill({color:0xf64c62,alpha:.12}).stroke({color:0xff6976,width:2});g.ellipse(p.x,p.y,150*(1-e.telegraph/.8),86*(1-e.telegraph/.8)).stroke({color:0xff6976,width:2});}
+ const actors=[{a:view.player,e:null},...w.enemies.filter(e=>e.hp>0||e.death>0).map(e=>({a:e,e}))].sort((a,b)=>a.a.x+a.a.y-b.a.x-b.a.y);
+ for(const a of actors){
+  if(a.e?.kind==='specter')drawSpecter(g,a.e,w.time,this.reducedMotion);
+  else if(a.e){if(a.e.hp>0)this.actor(g,a.a,true,this.reducedMotion?0:w.time);}
+  else drawKael(g,a.a,view,this.reducedMotion);
+ }
+ for(const b of w.projectiles)drawProjectile(g,b);
  this.swordTrail.update(view);drawSwordTrail(g,this.swordTrail,this.reducedMotion);
  const rig=kaelPose(view);
- Object.assign(this.app.canvas.dataset,{bladeX:String(rig.tip.x),bladeY:String(rig.tip.y),bladeLocalX:String(rig.blade.tip.x),bladeLocalY:String(rig.blade.tip.y),renderX:String(view.player.x),renderY:String(view.player.y),renderPhase:rig.pose.phase,renderTime:String(view.time),renderFacing:String(rig.facing),renderAttack:String(view.player.attack),attackId:String(view.attackId),trailCount:String(this.swordTrail.samples.length)});
- for(const e of w.effects)if(e.kind==='hit')drawImpact(g,e,e.life);
+ Object.assign(this.app.canvas.dataset,{bladeX:String(rig.tip.x),bladeY:String(rig.tip.y),bladeLocalX:String(rig.blade.tip.x),bladeLocalY:String(rig.blade.tip.y),renderX:String(view.player.x),renderY:String(view.player.y),renderPhase:rig.pose.phase,renderTime:String(view.time),renderFacing:String(rig.facing),renderAttack:String(view.player.attack),attackId:String(view.attackId),trailCount:String(this.swordTrail.samples.length),comboIndex:String(view.comboIndex??0),completedEncounters:String(w.completedEncounters),enemies:String(w.enemies.filter(e=>e.hp>0).length),projectiles:String(w.projectiles.length),enemyState:JSON.stringify(w.enemies.map(e=>({id:e.id,kind:e.kind,x:e.x,y:e.y,hp:e.hp,telegraph:e.telegraph,aim:e.aim,death:e.death}))),projectileState:JSON.stringify(w.projectiles),hp:String(w.player.hp),mode:w.mode});
+ for(const e of w.effects)if(e.kind==='hit')drawImpact(g,e,e.life,e.power);
  if(!this.reducedMotion)for(let i=0;i<32;i++){const x=Math.sin(i*71)*550,y=Math.cos(i*43)*260-((w.time*12+i*17)%150);g.circle(x,y,1.2).fill({color:0x63c5dc,alpha:.2+.2*Math.sin(w.time+i)});}
  this.app.render();
  }

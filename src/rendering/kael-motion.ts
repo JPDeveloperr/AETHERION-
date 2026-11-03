@@ -1,4 +1,4 @@
-import { BASIC_ATTACK as A, attackPose } from '../core/attack';
+import { attackSpec, attackPose } from '../core/attack';
 import type { Actor, World, Mode } from '../core/world';
 import { project, type Vec } from '../math/iso';
 
@@ -9,10 +9,11 @@ export interface PlayerFrame {
   attackStartedAt: number;
   attackId: number;
   mode: Mode;
+  comboIndex?: number;
 }
 export function capturePlayer(w:World):PlayerFrame {
   return {player:{...w.player},time:w.time,attackFacing:w.attackFacing,
-    attackStartedAt:w.attackStartedAt,attackId:w.attackId,mode:w.mode};
+    attackStartedAt:w.attackStartedAt,attackId:w.attackId,comboIndex:w.comboIndex,mode:w.mode};
 }
 const lerp=(a:number,b:number,t:number)=>a+(b-a)*t;
 export function angleLerp(a:number,b:number,t:number){return a+Math.atan2(Math.sin(b-a),Math.cos(b-a))*t;}
@@ -22,29 +23,30 @@ export function interpolatePlayer(a:PlayerFrame,b:PlayerFrame,alpha:number):Play
   const t=Math.max(0,Math.min(1,alpha)),time=lerp(a.time,b.time,t);
   // A newly accepted attack is an event, not a timer that may be lerped backwards.
   const event=b.attackId!==a.attackId&&time<b.attackStartedAt?a:b;
-  const elapsed=time-event.attackStartedAt;
+  const elapsed=time-event.attackStartedAt,A=attackSpec(event.comboIndex);
   const remaining=event.attackId>0&&elapsed>=0&&elapsed<A.duration?A.duration-elapsed:0;
   return {...event,time,mode:b.mode,player:{...b.player,
     x:lerp(a.player.x,b.player.x,t),y:lerp(a.player.y,b.player.y,t),
     facing:angleLerp(a.player.facing,b.player.facing,t),phase:lerp(a.player.phase,b.player.phase,t),
     moving:lerp(a.player.moving??0,b.player.moving??0,t),hurt:lerp(a.player.hurt,b.player.hurt,t),attack:remaining}};
 }
-export function bladePoints(facing:number,elapsed:number|null) {
-  const pose=elapsed===null?{angle:-.25,extension:1}:attackPose(elapsed);
+export function bladePoints(facing:number,elapsed:number|null,index=0) {
+  const pose=elapsed===null?{angle:-.25,extension:1}:attackPose(elapsed,index);
   const angle=facing+pose.angle;
-  const at=(radius:number,z:number)=>project({x:Math.cos(angle)*radius,y:Math.sin(angle)*radius},z);
+  const lift=index===2&&elapsed!==null?Math.sin(Math.PI*Math.max(0,Math.min(1,elapsed/attackSpec(index).duration)))**2*12:0;
+  const at=(radius:number,z:number)=>project({x:Math.cos(angle)*radius,y:Math.sin(angle)*radius},z+lift);
   return {grip:at(32*pose.extension,48),guard:at(42*pose.extension,48),tip:at(113*pose.extension,48),angle};
 }
 /** Shared, continuous body channels; locomotion never switches on/off at an attack edge. */
 export function kaelPose(f:PlayerFrame) {
-  const a=f.player,elapsed=a.attack>0?A.duration-a.attack:null;
-  const pose=elapsed===null?{angle:-.25,extension:1,twist:0,weight:0,phase:'idle' as const}:attackPose(elapsed);
+  const A=attackSpec(f.comboIndex),a=f.player,elapsed=a.attack>0?A.duration-a.attack:null;
+  const pose=elapsed===null?{angle:-.25,extension:1,twist:0,weight:0,phase:'idle' as const}:attackPose(elapsed,f.comboIndex);
   const facing=elapsed===null?a.facing:f.attackFacing;
   const breath=Math.sin(f.time*2.5)*.65;
-  const bob=lerp(breath,-Math.sin((elapsed??0)/A.duration*Math.PI)*1.7,pose.weight);
+  const bob=lerp(breath,-Math.sin((elapsed??0)/A.duration*Math.PI)*(f.comboIndex===2?3.5:1.7),pose.weight);
   const moving=a.moving??0;
   const stride=Math.sin(a.phase)*5*moving*(1-.25*pose.weight);
-  const position=project(a),blade=bladePoints(facing,elapsed);
+  const position=project(a),blade=bladePoints(facing,elapsed,f.comboIndex);
   return {elapsed,pose,facing,bob,stride,stance:2*pose.weight*(1-.7*moving),position,blade,
     grip:{x:position.x+blade.grip.x,y:position.y+bob+blade.grip.y},
     tip:{x:position.x+blade.tip.x,y:position.y+bob+blade.tip.y}};
@@ -65,6 +67,7 @@ export class SwordTrail {
   fade=0;
   time=0;
   update(frame:PlayerFrame) {
+    const A=attackSpec(frame.comboIndex);
     this.time=frame.time;
     const elapsed=frame.time-frame.attackStartedAt;
     if(frame.attackId!==this.id){this.samples.length=0;this.id=frame.attackId;}

@@ -1,5 +1,5 @@
 import { Graphics } from 'pixi.js';
-import { BASIC_ATTACK } from '../core/attack';
+import { attackSpec } from '../core/attack';
 import { kaelPose, elbowPoint, type PlayerFrame, type SwordTrail } from './kael-motion';
 export { bladePoints } from './kael-motion';
 import type { Actor } from '../core/world';
@@ -84,6 +84,7 @@ export function drawSwordTrail(g:Graphics,trail:SwordTrail,reducedMotion:boolean
 }
 
 export function drawKael(g:Graphics,a:Actor,w:PlayerFrame,reducedMotion:boolean){
+  const BASIC_ATTACK=attackSpec(w.comboIndex);
   const rig=kaelPose({...w,player:a}),{elapsed,pose,facing,bob,stride,stance}=rig,p=rig.position;
   const direction=project({x:Math.cos(facing),y:Math.sin(facing)});
   const look=Math.max(-1,Math.min(1,direction.x)),gait=Math.sin(a.phase);
@@ -163,12 +164,12 @@ export function drawKael(g:Graphics,a:Actor,w:PlayerFrame,reducedMotion:boolean)
   if(a.hurt>0)origin.circle(0,-53,12,C.ice,a.hurt*.35);
 }
 
-export function drawImpact(g:Graphics,position:Vec,life:number){
+export function drawImpact(g:Graphics,position:Vec,life:number,power=1){
   const p=project(position),ink=new Ink(g,p.x,p.y-46),age=.4-life,fade=Math.max(0,life/.4);
   // White core lasts < 70 ms; twelve shards and one thin ring expire in 400 ms.
-  if(age<.07){const t=1-age/.07;ink.circle(0,0,12*t,C.ice,t*.75);ink.poly([[0,-24*t],[4*t,-4*t],[18*t,0],[3*t,4*t],[0,20*t],[-3*t,3*t],[-18*t,0],[-4*t,-4*t]],C.ice,undefined,0,t);}
+  if(age<.07){const t=1-age/.07;ink.circle(0,0,12*t*power,C.ice,t*.75);ink.poly([[0,-24*t],[4*t,-4*t],[18*t,0],[3*t,4*t],[0,20*t],[-3*t,3*t],[-18*t,0],[-4*t,-4*t]],C.ice,undefined,0,t);}
   for(let i=0;i<12;i++){
-    const a=i*Math.PI/6+.23,r=7+age*(65+i%3*24),x=Math.cos(a)*r,y=Math.sin(a)*r*.65;
+    const a=i*Math.PI/6+.23,r=7+age*(65+i%3*24)*power,x=Math.cos(a)*r,y=Math.sin(a)*r*.65;
     const len=(4+i%3*2)*fade;
     ink.poly([[x,y-len],[x+len*.45,y],[x,y+len*.5],[x-len*.45,y]],i%3?C.cyan:C.shine,undefined,0,fade);
   }

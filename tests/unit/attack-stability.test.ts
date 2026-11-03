@@ -65,7 +65,7 @@ describe('fixed timestep presentation',()=>{
    else if(w.player.attack>0){expect(w.player.attack).toBeLessThan(previousRemaining);expect(w.attackFacing).toBe(locked);}
    previousRemaining=w.player.attack;
   }
-  expect(w.attackId).toBe(5);expect([A.damage,A.reach,A.cooldown]).toEqual([25,125,.38]);
+  expect(w.attackId).toBe(1);expect([A.damage,A.reach,A.cooldown]).toEqual([25,125,.38]);
  });
  it('remembers the last movement direction after stopping, without any aim input',()=>{
   const w=createWorld();w.mode='playing';for(let i=0;i<20;i++)step(w,{...idle,move:{x:0,y:1}},1/60);
