@@ -12,10 +12,18 @@ Decisão: TypeScript estrito, PixiJS 8 e Vite. Pixi gera toda a arte com Graphic
 
 Colisões simples por distância e limites da arena substituem Matter.js nesta entrega. Matter resolve física 2D, mas não representa por si só altura e sobreposição isométrica. Adicionar biblioteca somente quando a geometria de colisão justificar o custo.
 
-Limitações: sem interpolação entre snapshots, articular animações mais profundamente, separar UI do bootstrap ao adicionar novas telas, oclusão de colunas ainda simplificada (objetos estáticos em camada própria). A arena atual é plana; plataformas elevadas e suas colisões ainda não existem. Geometria dinâmica é redesenhada por quadro; medir CPU/GPU antes de ampliar população. Meta de 60 FPS ainda não medida em hardware intermediário.
+Limitações: interpolação entre snapshots cobre Kael e câmera; inimigos continuam no passo fixo, separar UI do bootstrap ao adicionar novas telas, oclusão de colunas ainda simplificada (objetos estáticos em camada própria). A arena atual é plana; plataformas elevadas e suas colisões ainda não existem. Geometria dinâmica é redesenhada por quadro; medir CPU/GPU antes de ampliar população. Meta de 60 FPS ainda não medida em hardware intermediário.
 
 ## Persistência atual
 
 Settings e checkpoint têm chaves separadas (`aetherion.settings.v1` e `aetherion.checkpoint.v1`). Configurações são validadas e limitadas. Save v1 registra derrota da Sentinela e horário UTC; continuar restaura esse marco com vida cheia. Não promete restaurar cada posição ou ataque. Gravação ocorre ao vencer o inimigo e concluir a arena, sem depender de unload. Falhas de quota/permissão são apresentadas. Dados corrompidos ou versão desconhecida não são aceitos como checkpoint válido.
 
 No desktop, injetar a implementação de PlatformServices no ponto de composição. O contrato ainda não implementa Electron: o procedimento e requisitos estão em DESKTOP_STEAM.md.
+
+## Evolução 0.2
+
+A simulação preserva os passos fixos e usa uma coleção limitada a dois inimigos por encontro. Cada inimigo mantém seus próprios avisos/cooldowns; os IDs impedem dano duplicado por golpe. `attack.ts` define as três curvas, usadas pela colisão e pelo rig interpolado. O buffer guarda uma entrada por vez, expira em tempo de simulação e não é alimentado por botões mantidos. O renderer mantém apenas 32 amostras da trajetória real.
+
+`rendering/specter.ts` gera toda a geometria do Espectro e projéteis. A mira trava no início do aviso; a colisão varre o segmento percorrido pelo projétil. Projéteis expiram ao atingir, sair dos limites, completar um encontro ou morrer. O Espectro dissolve seus fragmentos por 650 ms; a coleção é substituída antes do próximo encontro, após 1,3 s.
+
+Checkpoint v2 usa `aetherion.checkpoint.v2` e `completedEncounters` (0–3). O leitor aceita v1 pela chave antiga, sem apagá-la. A derrota antiga da Sentinela migra para um encontro concluído. Retomar cria apenas os adversários do encontro restante, com Kael em vida cheia. Salva ao concluir cada encontro e no portal; não serializa projéteis nem ataques em andamento.

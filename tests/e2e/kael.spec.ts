@@ -1,3 +1,4 @@
+import {begin} from './journey';
 import {test,expect} from '@playwright/test';
 
 // Frozen clock makes taps shorter than one simulation tick reproducible.
@@ -53,7 +54,7 @@ test('moving the mouse cannot change the sword pose at rest, running or during J
   const end=await read();expect(end.renderAttack).toBe('0');expect(end.trailCount).toBe('0');expect(end.renderFacing).toBe(attack.renderFacing);
 });
 
-test('holding J while running advances consecutive swings without resets or position jumps',async({page})=>{
+test('deliberate J taps while running advance the three cuts without resets or position jumps',async({page})=>{
   test.setTimeout(90000);
   await page.clock.install({time:new Date('2026-11-01T12:00:00Z')});
   await page.goto('/');await expect(page.locator('canvas')).toBeVisible();
@@ -69,11 +70,12 @@ test('holding J while running advances consecutive swings without resets or posi
   for(let i=0;i<30;i++){
     await page.clock.runFor(32);
     const f=await page.locator('canvas').evaluate(c=>({...c.dataset}));
+    if(i===6||i===18){await page.keyboard.up('KeyJ');await page.keyboard.down('KeyJ');}
     if(previous){
       const dt=Number(f.renderTime)-Number(previous.renderTime);
       expect(Math.hypot(Number(f.renderX)-Number(previous.renderX),Number(f.renderY)-Number(previous.renderY))).toBeCloseTo(speed*dt,5);
       if(f.attackId===previous.attackId&&Number(f.renderAttack)>0){expect(Number(f.renderAttack)).toBeLessThan(Number(previous.renderAttack));expect(f.renderFacing).toBe(previous.renderFacing);}
-      if(f.attackId!==previous.attackId){const start=Number(f.renderTime)-(.36-Number(f.renderAttack));expect(start-lastStart).toBeGreaterThanOrEqual(.38-1e-8);lastStart=start;transitions++;}
+      if(f.attackId!==previous.attackId){const duration=Number(f.comboIndex)===2?.5:.36;const start=Number(f.renderTime)-(duration-Number(f.renderAttack));expect(start-lastStart).toBeGreaterThanOrEqual(.38-1e-8);lastStart=start;transitions++;}
     }
     previous=f;
   }
@@ -82,3 +84,12 @@ test('holding J while running advances consecutive swings without resets or posi
   await expect(page.locator('canvas')).toHaveAttribute('data-render-attack','0');
   await expect(page.locator('canvas')).toHaveAttribute('data-trail-count','0');
 });
+
+ test('holding J produces one cut and a buffered tap produces only the next cut',async({page})=>{
+  test.setTimeout(90000);await begin(page);await page.keyboard.down('KeyJ');await page.clock.runFor(650);
+  await expect(page.locator('canvas')).toHaveAttribute('data-swings','1');
+  await expect(page.locator('canvas')).toHaveAttribute('data-render-attack','0');
+  await page.keyboard.up('KeyJ');await page.keyboard.press('KeyJ');await page.clock.runFor(64);
+  await expect(page.locator('canvas')).toHaveAttribute('data-combo-index','1');
+  await page.clock.runFor(600);await expect(page.locator('canvas')).toHaveAttribute('data-swings','2');
+ });
