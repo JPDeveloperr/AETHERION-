@@ -13,8 +13,9 @@ export const attackSpec = (index=0) => COMBO_ATTACKS[index] ?? BASIC_ATTACK;
 export const COMBO_GRACE = .48;
 export const INPUT_BUFFER = .32;
 export const smooth = (t:number) => {const x=Math.max(0,Math.min(1,t));return x*x*x*(x*(x*6-15)+10);};
-export function attackPose(elapsed:number,index=0) {
-  const a=attackSpec(index),s=a.direction;
+export function attackPose(elapsed:number,index=0) {return timelinePose(elapsed,attackSpec(index));}
+export function timelinePose(elapsed:number,a:{duration:number;windup:number;activeEnd:number;halfArc:number;direction:number}) {
+  const s=a.direction;
   if(elapsed<a.windup){
     const t=smooth(elapsed/a.windup);
     return {angle:-.25+(-s*a.halfArc+.25)*t,twist:-s*t*.32,extension:1-t*.15,weight:t,phase:'windup' as const};

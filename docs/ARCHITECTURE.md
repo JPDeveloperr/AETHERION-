@@ -27,3 +27,7 @@ A simulação preserva os passos fixos e usa uma coleção limitada a dois inimi
 `rendering/specter.ts` gera toda a geometria do Espectro e projéteis. A mira trava no início do aviso; a colisão varre o segmento percorrido pelo projétil. Projéteis expiram ao atingir, sair dos limites, completar um encontro ou morrer. O Espectro dissolve seus fragmentos por 650 ms; a coleção é substituída antes do próximo encontro, após 1,3 s.
 
 Checkpoint v2 usa `aetherion.checkpoint.v2` e `completedEncounters` (0–3). O leitor aceita v1 pela chave antiga, sem apagá-la. A derrota antiga da Sentinela migra para um encontro concluído. Retomar cria apenas os adversários do encontro restante, com Kael em vida cheia. Salva ao concluir cada encontro e no portal; não serializa projéteis nem ataques em andamento.
+
+## Evolução 0.3
+
+`core/abilities.ts` contém recursos e timelines dos especiais; `core/combat.ts` unifica aplicação de dano e reação. `world.ts` compõe esses módulos e usa identidades de ataques/projéteis na recompensa por esquiva. Definições e timelines são compartilhados com a renderização: frentes varridas usam o mesmo raio/setor das formas vetoriais. `rendering/aether.ts` desenha efeitos com vida e contagem fixas; `ui/aether.ts` gerencia estados da barra e feedback sem ampliar as regras no bootstrap. Snapshots de Kael carregam o evento de especial para interpolar corretamente início/recuperação. Aether é exclusivamente temporário; não há mudança de save. Ver [0.3](COMBAT_V03.md) para prioridade, pausa e validação.

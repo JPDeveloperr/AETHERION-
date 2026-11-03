@@ -14,7 +14,7 @@ export async function moveToward(page:Page,dx:number,dy:number,move=true){
  await page.evaluate(({keys,desired})=>{for(const code of keys)window.dispatchEvent(new KeyboardEvent(desired.includes(code)?'keydown':'keyup',{code}));},{keys,desired:[...desired]});
 }
 /** Read-only render telemetry drives real keyboard input; no world state is modified. */
-export async function completeJourney(page:Page,onStage?:(stage:number)=>Promise<void>){
+export async function completeJourney(page:Page,onStage?:(stage:number)=>Promise<void>,onTick?:(frame:Record<string,string|undefined>,iteration:number)=>Promise<boolean>){
  let seen=-1,sawProjectile=false;
  for(let i=0;i<650;i++){
   const f=await read(page),stage=Number(f.completedEncounters);
@@ -23,6 +23,7 @@ export async function completeJourney(page:Page,onStage?:(stage:number)=>Promise
   const enemies=JSON.parse(f.enemyState!) as {x:number;y:number;hp:number;kind:string;telegraph:number}[];
   const live=enemies.filter(e=>e.hp>0).sort((a,b)=>Math.hypot(a.x-Number(f.playerX),a.y-Number(f.playerY))-Math.hypot(b.x-Number(f.playerX),b.y-Number(f.playerY)));
   if(stage!==seen&&live.length){seen=stage;await onStage?.(stage);}
+  if(onTick&&await onTick(f,i))continue;
   const p={x:Number(f.playerX),y:Number(f.playerY)};
   const target=stage===3?{x:285,y:285}:live[0];
   if(!target){await moveToward(page,0,0,false);await page.clock.runFor(100);continue;}

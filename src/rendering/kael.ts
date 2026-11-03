@@ -88,7 +88,7 @@ export function drawKael(g:Graphics,a:Actor,w:PlayerFrame,reducedMotion:boolean)
   const rig=kaelPose({...w,player:a}),{elapsed,pose,facing,bob,stride,stance}=rig,p=rig.position;
   const direction=project({x:Math.cos(facing),y:Math.sin(facing)});
   const look=Math.max(-1,Math.min(1,direction.x)),gait=Math.sin(a.phase);
-  const energy=pose.phase==='active'?Math.sin(Math.PI*((elapsed??0)-BASIC_ATTACK.windup)/(BASIC_ATTACK.activeEnd-BASIC_ATTACK.windup)):0;
+  const energy=w.special?pose.weight:pose.phase==='active'?Math.sin(Math.PI*((elapsed??0)-BASIC_ATTACK.windup)/(BASIC_ATTACK.activeEnd-BASIC_ATTACK.windup)):0;
   const origin=new Ink(g,p.x,p.y);
   g.ellipse(p.x,p.y+3,23,8).fill({color:0x000000,alpha:.45});
   const ink=new Ink(g,p.x,p.y+bob);
